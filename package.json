@@ -2,7 +2,7 @@
   "name": "scheduling-app-root",
   "version": "1.0.0",
   "description": "Root package for the collaborative scheduling app",
-  "main": "index.js",
+  "main": "server/index.js",
   "scripts": {
     "dev": "concurrently \"npm run dev --prefix server\" \"npm start --prefix client\""
   },
