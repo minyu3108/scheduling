@@ -22,6 +22,9 @@ const db = admin.firestore();
 const eventsCollection = db.collection('events');
 
 const app = express();
+
+// Serve static files from the React build directory
+app.use(express.static(path.join(__dirname, '..', 'client', 'build')));
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -145,6 +148,12 @@ io.on('connection', async (socket) => {
       console.error('Error during manual deletion of old events:', error);
     }
   });
+});
+
+// The "catchall" handler: for any request that doesn't match a static file,
+// send back React's index.html file.
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'client', 'build', 'index.html'));
 });
 
 const PORT = process.env.PORT || 3001;
