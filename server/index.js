@@ -76,6 +76,7 @@ io.on('connection', async (socket) => {
         start: new Date(newEvent.start),
         end: new Date(newEvent.end),
         isTentative: newEvent.isTentative || false,
+        notes: newEvent.notes || '',
       });
       console.log('New event added with ID:', docRef.id);
       await broadcastEvents();
@@ -93,6 +94,7 @@ io.on('connection', async (socket) => {
         start: new Date(data.start),
         end: new Date(data.end),
         isTentative: data.isTentative || false,
+        notes: data.notes || '',
       });
       console.log('Event updated with ID:', id);
       await broadcastEvents();
@@ -115,10 +117,35 @@ io.on('connection', async (socket) => {
   socket.on('disconnect', () => {
     console.log('user disconnected');
   });
+
+  // Listen for a manual request to delete old events
+  socket.on('manual_delete_old_events', async (data) => {
+    try {
+      const beforeDate = new Date(data.beforeDate);
+      console.log(`Manual request to delete events before ${beforeDate.toISOString()}`);
+
+      const oldEventsQuery = eventsCollection.where('end', '<', beforeDate);
+      const snapshot = await oldEventsQuery.get();
+
+      if (snapshot.empty) {
+        console.log('No old events to delete.');
+        return;
+      }
+
+      const batch = db.batch();
+      snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      await batch.commit();
+
+      console.log(`Manually deleted ${snapshot.size} old events.`);
+      await broadcastEvents(); // Update clients
+
+    } catch (error) {
+      console.error('Error during manual deletion of old events:', error);
+    }
+  });
 });
-
-
-
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {

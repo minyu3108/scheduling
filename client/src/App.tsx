@@ -19,9 +19,12 @@ const App: React.FC = () => {
   const [selectedSlot, setSelectedSlot] = useState<{ start: Date; end: Date } | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<SchedulerEvent | null>(null); // The event being edited/deleted
   const [eventTitle, setEventTitle] = useState('');
+  const [notes, setNotes] = useState(''); // State for notes
   const [isTentative, setIsTentative] = useState(false);
   const [editStartTime, setEditStartTime] = useState<string>('');
   const [editEndTime, setEditEndTime] = useState<string>('');
+  const [deleteBeforeDate, setDeleteBeforeDate] = useState(moment().format('YYYY-MM-DD')); // State for manual delete date
+
 
   useEffect(() => {
     // Listen for the initial list of events from the server
@@ -33,16 +36,6 @@ const App: React.FC = () => {
         end: new Date(event.end),
       }));
       setEvents(parsedEvents);
-    });
-
-    // Listen for new events broadcasted by the server
-    socket.on('new_event', (newEvent: SchedulerEvent) => {
-      const parsedEvent = {
-        ...newEvent,
-        start: new Date(newEvent.start),
-        end: new Date(newEvent.end),
-      };
-      setEvents(prevEvents => [...prevEvents, parsedEvent]);
     });
 
     // Listen for updated events list after a deletion or update
@@ -58,7 +51,6 @@ const App: React.FC = () => {
     // Clean up the socket connection when the component unmounts
     return () => {
       socket.off('initial_events');
-      socket.off('new_event');
       socket.off('events_updated');
     };
   }, []);
@@ -69,12 +61,14 @@ const App: React.FC = () => {
     // Reset for new event
     setEventTitle('');
     setIsTentative(false);
+    setNotes('');
   }, []);
 
   const handleSelectEvent = useCallback((event: SchedulerEvent) => {
     setSelectedEvent(event);
     setEventTitle(event.title); // Pre-fill for editing
     setIsTentative(event.isTentative || false); // Pre-fill for editing
+    setNotes(event.notes || ''); // Pre-fill notes
     setEditStartTime(moment(event.start).format('YYYY-MM-DDTHH:mm')); // Format for datetime-local input
     setEditEndTime(moment(event.end).format('YYYY-MM-DDTHH:mm')); // Format for datetime-local input
     setShowEditModal(true);
@@ -87,6 +81,7 @@ const App: React.FC = () => {
         ...selectedSlot,
         title: eventTitle,
         isTentative: isTentative,
+        notes: notes,
       };
       // Emit the new event to the server
       socket.emit('add_event', newEvent);
@@ -95,6 +90,7 @@ const App: React.FC = () => {
       setShowAddModal(false);
       setEventTitle('');
       setIsTentative(false);
+      setNotes('');
       setSelectedSlot(null);
     }
   };
@@ -105,6 +101,7 @@ const App: React.FC = () => {
         ...selectedEvent,
         title: eventTitle,
         isTentative: isTentative,
+        notes: notes,
         start: new Date(editStartTime), // Use updated start time
         end: new Date(editEndTime),     // Use updated end time
       };
@@ -112,6 +109,7 @@ const App: React.FC = () => {
       setShowEditModal(false);
       setEventTitle('');
       setIsTentative(false);
+      setNotes('');
       setSelectedEvent(null);
       setEditStartTime('');
       setEditEndTime('');
@@ -124,11 +122,18 @@ const App: React.FC = () => {
       setShowEditModal(false);
       setEventTitle('');
       setIsTentative(false);
+      setNotes('');
       setSelectedEvent(null);
       setEditStartTime('');
       setEditEndTime('');
     }
   }, [selectedEvent]);
+
+  const handleManualDelete = () => {
+    if (window.confirm(`Are you sure you want to delete all events that ended before ${deleteBeforeDate}?`)) {
+      socket.emit('manual_delete_old_events', { beforeDate: deleteBeforeDate });
+    }
+  };
 
   const eventPropGetter: EventPropGetter<SchedulerEvent> = useCallback(
     (event) => ({
@@ -142,6 +147,21 @@ const App: React.FC = () => {
       <h1>Collaborative Scheduler</h1>
       <p>Click or drag on the calendar to add an available time slot.</p>
       <p>Click on an existing event to edit or delete it.</p>
+
+      <div className="controls-section">
+        <div className="manual-delete-section">
+          <label htmlFor="delete-date">Delete events ended before:</label>
+          <input
+              type="date"
+              id="delete-date"
+              value={deleteBeforeDate}
+              onChange={(e) => setDeleteBeforeDate(e.target.value)}
+          />
+          <button onClick={handleManualDelete} className="btn btn-danger btn-sm">
+              Delete Old Events
+          </button>
+        </div>
+      </div>
       
       <Calendar
         localizer={localizer}
@@ -178,6 +198,17 @@ const App: React.FC = () => {
                     onChange={(e) => setEventTitle(e.target.value)} 
                     placeholder="Enter your name"
                   />
+                </div>
+                <div className="mb-3">
+                  <label htmlFor="eventNotes" className="form-label">Notes</label>
+                  <textarea
+                    className="form-control"
+                    id="eventNotes"
+                    rows={3}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Optional notes..."
+                  ></textarea>
                 </div>
                 <div className="form-check">
                   <input 
@@ -240,6 +271,17 @@ const App: React.FC = () => {
                     value={eventTitle} 
                     onChange={(e) => setEventTitle(e.target.value)} 
                   />
+                </div>
+                <div className="mb-3">
+                  <label htmlFor="editEventNotes" className="form-label">Notes</label>
+                  <textarea
+                    className="form-control"
+                    id="editEventNotes"
+                    rows={3}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Optional notes..."
+                  ></textarea>
                 </div>
                 <div className="form-check">
                   <input 

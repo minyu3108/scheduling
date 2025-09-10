@@ -4,4 +4,5 @@ export interface SchedulerEvent {
   end: Date;
   title: string;
   isTentative?: boolean;
+  notes?: string;
 }
